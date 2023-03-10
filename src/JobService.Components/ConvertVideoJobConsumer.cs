@@ -19,13 +19,13 @@
         {
             var message = context.Job;
 
-            _logger.LogInformation("Converting Video: {GroupId} {Path} {Index}/{Count}", message.GroupId, message.Path, message.Index, message.Count);
+            _logger.LogInformation("Converting Video: {GroupId} {Index}/{Count}", message.GroupId, message.Index, message.Count);
             
             await Task.Delay(100);
 
             await context.Publish<VideoConverted>(context.Job);
             
-            _logger.LogInformation("Converted Video: {GroupId} {Path} {Index}/{Count}", message.GroupId, message.Path, message.Index, message.Count);
+            _logger.LogInformation("Converted Video: {GroupId} {Index}/{Count}", message.GroupId, message.Index, message.Count);
         }
     }
 }

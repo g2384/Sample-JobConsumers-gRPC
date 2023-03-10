@@ -33,21 +33,21 @@ public class JobSubmissionService : BackgroundService
 
         const int total = 2;
 
+        // method 1, use IRequestClient.GetResponse
         for (var i = 0; i < total; i++)
         {
             await Task.Delay(400, stoppingToken);
 
             var groupId = NewId.Next().ToString();
 
-            var path = NewId.Next() + ".txt";
-
-            Response<JobSubmissionAccepted> response = await client.GetResponse<JobSubmissionAccepted>(new
+            var message = new ConvertVideo
             {
-                path,
-                groupId,
+                GroupId = groupId,
                 Index = i + 1,
                 Count = total
-            });
+            };
+
+            Response<JobSubmissionAccepted> response = await client.GetResponse<JobSubmissionAccepted>(message);
 
             _logger.LogInformation("Job submitted: {Content} {Index}/{Count}", response.Message, i + 1, total);
         }
@@ -55,11 +55,13 @@ public class JobSubmissionService : BackgroundService
         await Task.Delay(1000); // waiting for the jobs to finish
         _logger.LogInformation("===============================================================");
 
+        // method 2, use URI + context.RequestId = NewId.NextGuid();
         using (var scope = _serviceProvider.CreateScope())
         {
             // use SendEndpointProvider
             var provider = scope.ServiceProvider.GetRequiredService<ISendEndpointProvider>();
 
+            // or just use _bus.GetSendEndpoint(new Uri("queue:convert-job-queue")), without creating the scope
             var sender = await provider.GetSendEndpoint(new Uri("queue:convert-job-queue"));
             for (var i = 0; i < total; i++)
             {
@@ -69,18 +71,62 @@ public class JobSubmissionService : BackgroundService
 
                 var message = new ConvertVideo
                 {
-                    Path = NewId.Next() + ".txt",
                     GroupId = groupId,
                     Index = i + 1,
                     Count = total
                 };
 
-                await sender.Send(message, new CancellationToken());
+                await sender.Send(message, context =>
+                {
+                    context.RequestId = NewId.NextGuid();
+                }, new CancellationToken());
 
-                _logger.LogInformation("Job submitted: {Content} {Index}/{Count}", message.Path, i + 1, total);
+                _logger.LogInformation("Job submitted: {Content} {Index}/{Count}", message.GroupId, i + 1, total);
+            }
+        }
+
+        await Task.Delay(1000); // waiting for the jobs to finish
+        _logger.LogInformation("===============================================================");
+
+        // method 3, use URI + Send<SubmitJob<T>>
+        using (var scope = _serviceProvider.CreateScope())
+        {
+            // use SendEndpointProvider
+            var provider = scope.ServiceProvider.GetRequiredService<ISendEndpointProvider>();
+
+            // or just use _bus.GetSendEndpoint(new Uri("queue:convert-job-queue")), without creating the scope
+            var sender = await provider.GetSendEndpoint(new Uri("queue:convert-job-queue"));
+            for (var i = 0; i < total; i++)
+            {
+                await Task.Delay(400, stoppingToken);
+
+                var groupId = NewId.Next().ToString();
+
+                var message = new ConvertVideo
+                {
+                    GroupId = groupId,
+                    Index = i + 1,
+                    Count = total
+                };
+
+                await sender.Send<SubmitJob<ConvertVideo>>(new SubmitJobClass<ConvertVideo>()
+                {
+                    Job = message,
+                    JobId = NewId.NextGuid()
+                }, new CancellationToken());
+
+                _logger.LogInformation("Job submitted: {Content} {Index}/{Count}", message.GroupId, i + 1, total);
             }
         }
 
         return;
+    }
+
+    public class SubmitJobClass<TJob> : SubmitJob<TJob>
+        where TJob : class
+    {
+        public TJob Job { get; init; }
+
+        public Guid JobId { get; init; }
     }
 }
