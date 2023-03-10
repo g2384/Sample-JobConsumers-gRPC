@@ -20,11 +20,11 @@
         {
             var rng = new Random();
 
-            var variance = TimeSpan.FromMilliseconds(rng.Next(8399, 28377));
+            //var variance = TimeSpan.FromMilliseconds(rng.Next(8399, 28377));
 
             _logger.LogInformation("Converting Video: {GroupId} {Path}", context.Job.GroupId, context.Job.Path);
             
-            await Task.Delay(variance);
+            await Task.Delay(100);
 
             await context.Publish<VideoConverted>(context.Job);
             
