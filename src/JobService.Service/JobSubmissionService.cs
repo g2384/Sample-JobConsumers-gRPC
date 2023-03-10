@@ -6,18 +6,21 @@ using System.Threading.Tasks;
 using JobService.Components;
 using MassTransit;
 using MassTransit.Contracts.JobService;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 public class JobSubmissionService : BackgroundService
 {
     readonly IBusControl _bus;
+    readonly IServiceProvider _serviceProvider;
     readonly ILogger<JobSubmissionService> _logger;
 
-    public JobSubmissionService(ILogger<JobSubmissionService> logger, IBusControl bus)
+    public JobSubmissionService(ILogger<JobSubmissionService> logger, IBusControl bus, IServiceProvider serviceProvider)
     {
         _logger = logger;
         _bus = bus;
+        _serviceProvider = serviceProvider;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -49,27 +52,35 @@ public class JobSubmissionService : BackgroundService
             _logger.LogInformation("Job submitted: {Content} {Index}/{Count}", response.Message, i + 1, total);
         }
 
+        await Task.Delay(1000); // waiting for the jobs to finish
         _logger.LogInformation("===============================================================");
 
-        var sender = await _bus.GetSendEndpoint(new Uri("queue:convert-job-queue"));
-        for (var i = 0; i < total; i++)
+        using (var scope = _serviceProvider.CreateScope())
         {
-            await Task.Delay(400, stoppingToken);
+            // use SendEndpointProvider
+            var provider = scope.ServiceProvider.GetRequiredService<ISendEndpointProvider>();
 
-            var groupId = NewId.Next().ToString();
-
-            var message = new ConvertVideo
+            var sender = await provider.GetSendEndpoint(new Uri("queue:convert-job-queue"));
+            for (var i = 0; i < total; i++)
             {
-                Path = NewId.Next() + ".txt",
-                GroupId = groupId,
-                Index = i + 1,
-                Count = total
-            };
+                await Task.Delay(400, stoppingToken);
 
-            await sender.Send(message, new CancellationToken());
+                var groupId = NewId.Next().ToString();
 
-            _logger.LogInformation("Job submitted: {Content} {Index}/{Count}", message.Path, i + 1, total);
+                var message = new ConvertVideo
+                {
+                    Path = NewId.Next() + ".txt",
+                    GroupId = groupId,
+                    Index = i + 1,
+                    Count = total
+                };
+
+                await sender.Send(message, new CancellationToken());
+
+                _logger.LogInformation("Job submitted: {Content} {Index}/{Count}", message.Path, i + 1, total);
+            }
         }
+
         return;
     }
 }

@@ -1,6 +1,5 @@
 ﻿namespace JobService.Components
 {
-    using System;
     using System.Threading.Tasks;
     using MassTransit;
     using Microsoft.Extensions.Logging;
@@ -18,17 +17,15 @@
 
         public async Task Run(JobContext<ConvertVideo> context)
         {
-            var rng = new Random();
+            var message = context.Job;
 
-            //var variance = TimeSpan.FromMilliseconds(rng.Next(8399, 28377));
-
-            _logger.LogInformation("Converting Video: {GroupId} {Path}", context.Job.GroupId, context.Job.Path);
+            _logger.LogInformation("Converting Video: {GroupId} {Path} {Index}/{Count}", message.GroupId, message.Path, message.Index, message.Count);
             
             await Task.Delay(100);
 
             await context.Publish<VideoConverted>(context.Job);
             
-            _logger.LogInformation("Converted Video: {GroupId} {Path}", context.Job.GroupId, context.Job.Path);
+            _logger.LogInformation("Converted Video: {GroupId} {Path} {Index}/{Count}", message.GroupId, message.Path, message.Index, message.Count);
         }
     }
 }
